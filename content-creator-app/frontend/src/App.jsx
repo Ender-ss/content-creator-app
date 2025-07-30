@@ -43,6 +43,8 @@ function App() {
   const [generatedTitles, setGeneratedTitles] = useState([]);
   const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
   const [titleGenerationError, setTitleGenerationError] = useState('');
+  const [generatedSummaries, setGeneratedSummaries] = useState({});
+  const [selectedSummaryAgent, setSelectedSummaryAgent] = useState('gemini');
   
   // Estados para geração de roteiros com IA
   const [scriptTitle, setScriptTitle] = useState('');
@@ -448,6 +450,48 @@ Apresente ao usuário SOMENTE a premissa final completa em texto corrido (result
       console.error('Erro na geração de premissa:', error);
     } finally {
       setIsGeneratingPremise(false);
+    }
+  };
+
+  const generateSummary = async (videoId, title) => {
+    const selectedApiKey = apiKeys[selectedSummaryAgent === 'chatgpt' ? 'openai' : selectedSummaryAgent];
+    if (!selectedApiKey) {
+      setError(`Configure a chave da API ${selectedSummaryAgent.toUpperCase()} nas Configurações primeiro.`);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const response = await fetch('http://localhost:5000/api/generate-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          agent: selectedSummaryAgent,
+          api_key: selectedApiKey,
+          title: title
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setGeneratedSummaries(prev => ({...prev, [videoId]: data.summary}));
+      } else {
+        throw new Error(data.error || 'Erro ao gerar resumo');
+      }
+    } catch (error) {
+      setError(`Erro ao gerar resumo: ${error.message}`);
+      console.error('Erro na geração de resumo:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1831,6 +1875,34 @@ Apresente ao usuário SOMENTE a premissa final completa em texto corrido (result
                               <span className="bg-gray-600 text-gray-200 px-2 py-1 rounded">
                                 ID: {titleData.videoId}
                               </span>
+                            )}
+                          </div>
+                          <div className="mt-4">
+                            <div className="flex items-center space-x-2">
+                              <select
+                                value={selectedSummaryAgent}
+                                onChange={(e) => setSelectedSummaryAgent(e.target.value)}
+                                className="bg-gray-600 border border-gray-500 text-white px-2 py-1 rounded-md text-xs"
+                              >
+                                <option value="gemini">Gemini</option>
+                                <option value="chatgpt">ChatGPT</option>
+                                <option value="claude">Claude</option>
+                                <option value="openrouter">OpenRouter</option>
+                              </select>
+                              <button
+                                onClick={() => generateSummary(titleData.videoId, titleData.title)}
+                                className="bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded-md text-xs flex items-center"
+                              >
+                                <Wand2 className="h-3 w-3 mr-1" />
+                                Gerar Resumo
+                              </button>
+                            </div>
+                            {generatedSummaries[titleData.videoId] && (
+                              <div className="mt-2 bg-gray-600 p-2 rounded">
+                                <p className="text-xs text-gray-300 whitespace-pre-wrap">
+                                  {generatedSummaries[titleData.videoId]}
+                                </p>
+                              </div>
                             )}
                           </div>
                         </div>

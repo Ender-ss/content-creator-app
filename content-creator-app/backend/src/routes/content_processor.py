@@ -1765,6 +1765,85 @@ Resumo: '{resume}'"""
             'error': f'Erro ao gerar premissa com OpenRouter: {str(e)}'
         }
 
+@content_processor_bp.route('/generate-summary', methods=['POST'])
+def generate_summary():
+    """Generate summary from title using AI"""
+    try:
+        data = request.get_json()
+        agent = data.get('agent', 'gemini').lower()
+        api_key = data.get('api_key', '').strip()
+        title = data.get('title', '').strip()
+
+        print(f"DEBUG: Generate summary request - Agent: {agent}, Title: {title[:50]}...")
+
+        if not api_key:
+            return jsonify({
+                'success': False,
+                'error': f'Chave da API {agent.upper()} é obrigatória'
+            }), 400
+
+        if not title:
+            return jsonify({
+                'success': False,
+                'error': 'Título é obrigatório'
+            }), 400
+
+        instructions = "Por favor, forneça um resumo com extensão entre 1.000 e 2.000 caracteres, sobre o texto acima (no caso o título) em Português do Brasil."
+
+        # Generate summary based on the selected agent
+        if agent == 'chatgpt' or agent == 'openai':
+            result = generate_summary_with_openai(title, instructions, api_key)
+        elif agent == 'claude':
+            result = generate_summary_with_claude(title, instructions, api_key)
+        elif agent == 'gemini':
+            result = generate_summary_with_gemini(title, instructions, api_key)
+        elif agent == 'openrouter':
+            result = generate_summary_with_openrouter(title, instructions, api_key)
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Agente {agent} não suportado'
+            }), 400
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"DEBUG: Exception in generate_summary: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+def generate_summary_with_openai(title, instructions, api_key):
+    """Generate summary using OpenAI ChatGPT (placeholder)"""
+    return {
+        'success': True,
+        'summary': f"[Placeholder] Resumo gerado por OpenAI para o título: '{title}' com as instruções: '{instructions}'"
+    }
+
+def generate_summary_with_claude(title, instructions, api_key):
+    """Generate summary using Anthropic Claude (placeholder)"""
+    return {
+        'success': True,
+        'summary': f"[Placeholder] Resumo gerado por Claude para o título: '{title}' com as instruções: '{instructions}'"
+    }
+
+def generate_summary_with_gemini(title, instructions, api_key):
+    """Generate summary using Google Gemini (placeholder)"""
+    return {
+        'success': True,
+        'summary': f"[Placeholder] Resumo gerado por Gemini para o título: '{title}' com as instruções: '{instructions}'"
+    }
+
+def generate_summary_with_openrouter(title, instructions, api_key):
+    """Generate summary using OpenRouter (placeholder)"""
+    return {
+        'success': True,
+        'summary': f"[Placeholder] Resumo gerado por OpenRouter para o título: '{title}' com as instruções: '{instructions}'"
+    }
+
 @content_processor_bp.route('/audio/voices', methods=['POST'])
 def get_available_voices():
     """Get available voices for a TTS service"""
