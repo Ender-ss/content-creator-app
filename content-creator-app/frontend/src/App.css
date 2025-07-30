@@ -1,0 +1,47 @@
+u/* App-specific styles */
+.app-container {
+  min-height: 100vh;
+}
+
+/* Custom animations and transitions */
+.step-transition {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Custom component styles */
+.gradient-bg {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Loading animations */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pulse-slow {
+  animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Modal and Dialog fixes */
+[data-radix-dialog-content] {
+  background-color: white !important;
+  opacity: 1 !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+
+[data-radix-dialog-overlay] {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Card components */
+.card-solid {
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  opacity: 1;
+}
