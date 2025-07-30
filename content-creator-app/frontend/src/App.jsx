@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Play, Download, Settings, FileText, Image, Video, Music, Wand2, Eye, EyeOff, CheckCircle, Cog, AlertCircle, Loader2, Search, Home, Lightbulb, BookOpen, Mic, ImageIcon, Filter, Calendar, TrendingUp, BarChart3, Link, TestTube, RefreshCw, Copy, Plus, Trash2, Bot, Zap, Scissors, Type, Volume2 } from 'lucide-react';
+import { Upload, Play, Download, Settings, FileText, Image, Video, Music, Wand2, Eye, EyeOff, CheckCircle, Cog, AlertCircle, Loader2, Search, Home, Lightbulb, BookOpen, Mic, ImageIcon, Filter, Calendar, TrendingUp, BarChart3, Link, TestTube, RefreshCw, Copy, Plus, Trash2, Bot, Zap, Scissors, Type, Volume2, Edit } from 'lucide-react';
 import TestRapidAPI from './TestRapidAPI';
 import TestGeminiTTS from './TestGeminiTTS';
 import './App.css';
@@ -2377,7 +2377,7 @@ Retorne apenas os 5 títulos, um por linha, sem numeração.`;
                     {showTitleGenerator && (
                       <div className="space-y-4">
                         {/* Configurações de Serviço */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
                               Serviço de IA
