@@ -3003,6 +3003,7 @@ def generate_summary():
         api_key = data.get('api_key', '').strip()
         service = data.get('service', 'openai').lower()
         max_tokens = data.get('max_tokens', 500)
+        model = data.get('model', 'auto')
 
         if not prompt:
             return jsonify({
@@ -3069,6 +3070,59 @@ def generate_summary():
 
             response = model.generate_content(prompt)
             summary = response.text.strip()
+
+        elif service == 'openrouter':
+            # OpenRouter API
+            import requests
+
+            # Determinar o modelo a usar
+            if model == 'auto':
+                selected_model = 'openai/gpt-4o-mini'  # Modelo padrão mais econômico
+            else:
+                selected_model = model
+
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'http://localhost:3000',  # Opcional
+                'X-Title': 'Content Creator App'  # Opcional
+            }
+
+            payload = {
+                'model': selected_model,
+                'messages': [
+                    {
+                        'role': 'system',
+                        'content': 'Você é um especialista em criar resumos informativos e envolventes para vídeos do YouTube em português brasileiro.'
+                    },
+                    {
+                        'role': 'user',
+                        'content': prompt
+                    }
+                ],
+                'max_tokens': max_tokens,
+                'temperature': 0.7
+            }
+
+            response = requests.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                summary = result['choices'][0]['message']['content'].strip()
+            else:
+                error_msg = f'Erro OpenRouter: {response.status_code}'
+                try:
+                    error_data = response.json()
+                    if 'error' in error_data:
+                        error_msg += f' - {error_data["error"].get("message", "Erro desconhecido")}'
+                except:
+                    pass
+                raise Exception(error_msg)
 
         else:
             return jsonify({

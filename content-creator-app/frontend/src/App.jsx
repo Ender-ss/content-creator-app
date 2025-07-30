@@ -182,7 +182,30 @@ Apresente ao usuário SOMENTE a premissa final completa em texto corrido (result
   const [isGeneratingSummaries, setIsGeneratingSummaries] = useState(false);
   const [summaryGenerationProgress, setSummaryGenerationProgress] = useState(0);
   const [selectedSummaryService, setSelectedSummaryService] = useState('openai');
+  const [selectedOpenRouterModel, setSelectedOpenRouterModel] = useState('auto');
   const [autoGenerateSummaries, setAutoGenerateSummaries] = useState(true);
+
+  // Estados para geração de títulos personalizados
+  const [showTitleGenerator, setShowTitleGenerator] = useState(false);
+  const [titlePrompt, setTitlePrompt] = useState('');
+  const [selectedTitleService, setSelectedTitleService] = useState('openai');
+  const [selectedTitleOpenRouterModel, setSelectedTitleOpenRouterModel] = useState('auto');
+  const [isGeneratingCustomTitle, setIsGeneratingCustomTitle] = useState(false);
+  const [generatedCustomTitles, setGeneratedCustomTitles] = useState([]);
+
+  // Modelos disponíveis no OpenRouter
+  const openRouterModels = [
+    { id: 'auto', name: 'Auto (Melhor modelo disponível)' },
+    { id: 'openai/gpt-4o', name: 'GPT-4o (OpenAI)' },
+    { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (OpenAI)' },
+    { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet (Anthropic)' },
+    { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku (Anthropic)' },
+    { id: 'google/gemini-pro-1.5', name: 'Gemini Pro 1.5 (Google)' },
+    { id: 'meta-llama/llama-3.1-405b-instruct', name: 'Llama 3.1 405B (Meta)' },
+    { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B (Meta)' },
+    { id: 'mistralai/mistral-large', name: 'Mistral Large (Mistral AI)' },
+    { id: 'cohere/command-r-plus', name: 'Command R+ (Cohere)' }
+  ];
 
   // Estados para divisão e junção de áudio
   const [audioSegments, setAudioSegments] = useState([]);
@@ -1255,7 +1278,7 @@ Apresente ao usuário SOMENTE a premissa final completa em texto corrido (result
   // Função para gerar resumo de um título específico
   const generateSummaryForTitle = async (title, service = 'openai') => {
     try {
-      const apiKey = apiKeys[service === 'chatgpt' ? 'openai' : service];
+      const apiKey = apiKeys[service === 'chatgpt' ? 'openai' : service === 'openrouter' ? 'openrouter' : service];
       if (!apiKey) {
         throw new Error(`API key do ${service.toUpperCase()} não configurada`);
       }
@@ -1271,17 +1294,24 @@ O resumo deve:
 - Ter entre 1.000 e 2.000 caracteres
 - Estar em português brasileiro`;
 
+      const requestBody = {
+        prompt: prompt,
+        api_key: apiKey,
+        service: service,
+        max_tokens: 500
+      };
+
+      // Adicionar modelo do OpenRouter se necessário
+      if (service === 'openrouter') {
+        requestBody.model = selectedOpenRouterModel;
+      }
+
       const response = await fetch('http://localhost:5000/api/generate-summary', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          prompt: prompt,
-          api_key: apiKey,
-          service: service,
-          max_tokens: 500
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json();
@@ -1303,7 +1333,7 @@ O resumo deve:
       return;
     }
 
-    const apiKey = apiKeys[selectedSummaryService === 'chatgpt' ? 'openai' : selectedSummaryService];
+    const apiKey = apiKeys[selectedSummaryService === 'chatgpt' ? 'openai' : selectedSummaryService === 'openrouter' ? 'openrouter' : selectedSummaryService];
     if (!apiKey) {
       setError(`Configure a chave da API ${selectedSummaryService.toUpperCase()} nas Configurações primeiro.`);
       return;
@@ -1352,6 +1382,83 @@ O resumo deve:
     } finally {
       setIsGeneratingSummaries(false);
       setSummaryGenerationProgress(0);
+    }
+  };
+
+  // Função para gerar títulos personalizados
+  const generateCustomTitle = async () => {
+    if (!titlePrompt.trim()) {
+      setError('Digite um prompt para gerar títulos');
+      return;
+    }
+
+    const apiKey = apiKeys[selectedTitleService === 'chatgpt' ? 'openai' : selectedTitleService === 'openrouter' ? 'openrouter' : selectedTitleService];
+    if (!apiKey) {
+      setError(`Configure a chave da API ${selectedTitleService.toUpperCase()} nas Configurações primeiro.`);
+      return;
+    }
+
+    setIsGeneratingCustomTitle(true);
+    setError('');
+
+    try {
+      const prompt = `Baseado no seguinte prompt, gere 5 títulos sensacionalistas e atrativos para vídeos do YouTube em português brasileiro:
+
+"${titlePrompt}"
+
+Os títulos devem:
+- Ser chamativos e despertar curiosidade
+- Usar palavras de impacto e emoção
+- Ter entre 40-60 caracteres idealmente
+- Incluir elementos de suspense ou surpresa
+- Ser otimizados para cliques (clickbait ético)
+- Estar em português brasileiro
+
+Retorne apenas os 5 títulos, um por linha, sem numeração.`;
+
+      const requestBody = {
+        prompt: prompt,
+        api_key: apiKey,
+        service: selectedTitleService,
+        max_tokens: 300
+      };
+
+      // Adicionar modelo do OpenRouter se necessário
+      if (selectedTitleService === 'openrouter') {
+        requestBody.model = selectedTitleOpenRouterModel;
+      }
+
+      const response = await fetch('http://localhost:5000/api/generate-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        // Processar os títulos gerados
+        const titles = data.summary.split('\n')
+          .filter(title => title.trim())
+          .map((title, index) => ({
+            id: Date.now() + index,
+            title: title.trim().replace(/^\d+\.\s*/, ''), // Remove numeração se houver
+            service: selectedTitleService,
+            model: selectedTitleService === 'openrouter' ? selectedTitleOpenRouterModel : selectedTitleService,
+            prompt: titlePrompt
+          }));
+
+        setGeneratedCustomTitles(titles);
+        setTitlePrompt(''); // Limpar o prompt após gerar
+      } else {
+        throw new Error(data.error || 'Erro ao gerar títulos');
+      }
+    } catch (error) {
+      setError(`Erro ao gerar títulos: ${error.message}`);
+      console.error('Erro na geração de títulos:', error);
+    } finally {
+      setIsGeneratingCustomTitle(false);
     }
   };
 
@@ -1919,10 +2026,31 @@ O resumo deve:
                         <option value="openai">OpenAI GPT-4</option>
                         <option value="claude">Anthropic Claude</option>
                         <option value="gemini">Google Gemini</option>
+                        <option value="openrouter">OpenRouter (Múltiplos modelos)</option>
                       </select>
                       <p className="text-xs text-gray-400 mt-1">
                         Escolha o serviço de IA para gerar resumos dos títulos
                       </p>
+
+                      {/* Seletor de modelo OpenRouter */}
+                      {selectedSummaryService === 'openrouter' && (
+                        <div className="mt-3">
+                          <label className="block text-xs font-medium text-gray-400 mb-1">
+                            Modelo OpenRouter
+                          </label>
+                          <select
+                            value={selectedOpenRouterModel}
+                            onChange={(e) => setSelectedOpenRouterModel(e.target.value)}
+                            className="w-full bg-gray-600 border border-gray-500 rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                          >
+                            {openRouterModels.map(model => (
+                              <option key={model.id} value={model.id}>
+                                {model.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
 
                     {/* Opção de Geração Automática */}
@@ -1953,7 +2081,7 @@ O resumo deve:
                     <div className="mt-4 pt-4 border-t border-gray-700">
                       <button
                         onClick={generateSummariesForAllTitles}
-                        disabled={isGeneratingSummaries || !apiKeys[selectedSummaryService === 'chatgpt' ? 'openai' : selectedSummaryService]}
+                        disabled={isGeneratingSummaries || !apiKeys[selectedSummaryService === 'chatgpt' ? 'openai' : selectedSummaryService === 'openrouter' ? 'openrouter' : selectedSummaryService]}
                         className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-6 rounded-md flex items-center"
                       >
                         {isGeneratingSummaries ? (
@@ -1968,7 +2096,7 @@ O resumo deve:
                           </>
                         )}
                       </button>
-                      {!apiKeys[selectedSummaryService === 'chatgpt' ? 'openai' : selectedSummaryService] && (
+                      {!apiKeys[selectedSummaryService === 'chatgpt' ? 'openai' : selectedSummaryService === 'openrouter' ? 'openrouter' : selectedSummaryService] && (
                         <p className="text-xs text-red-400 mt-2">
                           Configure a API {selectedSummaryService.toUpperCase()} nas Configurações
                         </p>
@@ -2228,6 +2356,149 @@ O resumo deve:
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Gerador de Títulos Personalizados */}
+                <div className="bg-gray-800 border border-gray-700 rounded-lg mb-6">
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <Edit className="h-6 w-6 text-blue-500" />
+                        <h3 className="text-xl font-semibold text-white">Criar Títulos Personalizados</h3>
+                      </div>
+                      <button
+                        onClick={() => setShowTitleGenerator(!showTitleGenerator)}
+                        className="text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        {showTitleGenerator ? 'Ocultar' : 'Mostrar'}
+                      </button>
+                    </div>
+
+                    {showTitleGenerator && (
+                      <div className="space-y-4">
+                        {/* Configurações de Serviço */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                              Serviço de IA
+                            </label>
+                            <select
+                              value={selectedTitleService}
+                              onChange={(e) => setSelectedTitleService(e.target.value)}
+                              className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="openai">OpenAI GPT-4</option>
+                              <option value="claude">Anthropic Claude</option>
+                              <option value="gemini">Google Gemini</option>
+                              <option value="openrouter">OpenRouter (Múltiplos modelos)</option>
+                            </select>
+
+                            {/* Seletor de modelo OpenRouter */}
+                            {selectedTitleService === 'openrouter' && (
+                              <div className="mt-2">
+                                <label className="block text-xs font-medium text-gray-400 mb-1">
+                                  Modelo OpenRouter
+                                </label>
+                                <select
+                                  value={selectedTitleOpenRouterModel}
+                                  onChange={(e) => setSelectedTitleOpenRouterModel(e.target.value)}
+                                  className="w-full bg-gray-600 border border-gray-500 rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                  {openRouterModels.map(model => (
+                                    <option key={model.id} value={model.id}>
+                                      {model.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Campo de Prompt */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Descreva o tipo de título que você quer
+                          </label>
+                          <textarea
+                            value={titlePrompt}
+                            onChange={(e) => setTitlePrompt(e.target.value)}
+                            placeholder="Ex: Títulos sobre como ganhar dinheiro online para iniciantes, focado em métodos simples e rápidos..."
+                            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                            rows={3}
+                          />
+                          <p className="text-xs text-gray-400 mt-1">
+                            Seja específico sobre o tema, público-alvo e estilo desejado
+                          </p>
+                        </div>
+
+                        {/* Botão de Geração */}
+                        <div className="flex items-center space-x-4">
+                          <button
+                            onClick={generateCustomTitle}
+                            disabled={isGeneratingCustomTitle || !titlePrompt.trim() || !apiKeys[selectedTitleService === 'openrouter' ? 'openrouter' : selectedTitleService]}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-6 rounded-md flex items-center"
+                          >
+                            {isGeneratingCustomTitle ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Gerando...
+                              </>
+                            ) : (
+                              <>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Gerar 5 Títulos
+                              </>
+                            )}
+                          </button>
+
+                          {!apiKeys[selectedTitleService === 'openrouter' ? 'openrouter' : selectedTitleService] && (
+                            <p className="text-xs text-red-400">
+                              Configure a API {selectedTitleService.toUpperCase()} nas Configurações
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Títulos Gerados Personalizados */}
+                        {generatedCustomTitles.length > 0 && (
+                          <div className="mt-6 pt-4 border-t border-gray-700">
+                            <h4 className="text-lg font-semibold text-white mb-3">Títulos Gerados:</h4>
+                            <div className="space-y-2">
+                              {generatedCustomTitles.map((title) => (
+                                <div key={title.id} className="bg-gray-700 rounded-lg p-3 flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <p className="text-white font-medium">{title.title}</p>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                      Gerado com {title.service === 'openrouter' ? `OpenRouter (${title.model})` : title.service.toUpperCase()}
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      // Adicionar à lista de títulos gerados
+                                      const newTitle = {
+                                        id: Date.now(),
+                                        title: title.title,
+                                        service: title.service,
+                                        model: title.model,
+                                        isCustom: true
+                                      };
+                                      setGeneratedTitles(prev => [newTitle, ...prev]);
+                                      // Feedback visual
+                                      alert('Título adicionado à lista de títulos gerados!');
+                                    }}
+                                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs flex items-center"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Usar
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Títulos Gerados */}
