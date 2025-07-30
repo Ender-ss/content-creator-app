@@ -178,6 +178,12 @@ Apresente ao usuário SOMENTE a premissa final completa em texto corrido (result
   const [geminiUsageToday, setGeminiUsageToday] = useState({});
   const [showGeminiApiManager, setShowGeminiApiManager] = useState(false);
 
+  // Estados para geração de resumos
+  const [isGeneratingSummaries, setIsGeneratingSummaries] = useState(false);
+  const [summaryGenerationProgress, setSummaryGenerationProgress] = useState(0);
+  const [selectedSummaryService, setSelectedSummaryService] = useState('openai');
+  const [autoGenerateSummaries, setAutoGenerateSummaries] = useState(true);
+
   // Estados para divisão e junção de áudio
   const [audioSegments, setAudioSegments] = useState([]);
   const [isGeneratingSegments, setIsGeneratingSegments] = useState(false);
@@ -1246,6 +1252,109 @@ Apresente ao usuário SOMENTE a premissa final completa em texto corrido (result
     }
   }, []);
 
+  // Função para gerar resumo de um título específico
+  const generateSummaryForTitle = async (title, service = 'openai') => {
+    try {
+      const apiKey = apiKeys[service === 'chatgpt' ? 'openai' : service];
+      if (!apiKey) {
+        throw new Error(`API key do ${service.toUpperCase()} não configurada`);
+      }
+
+      const prompt = `Por favor, forneça um resumo com extensão entre 1.000 e 2.000 caracteres, sobre o seguinte título de vídeo do YouTube em Português do Brasil:
+
+"${title}"
+
+O resumo deve:
+- Explicar o que provavelmente será abordado no vídeo
+- Ser informativo e envolvente
+- Usar linguagem clara e acessível
+- Ter entre 1.000 e 2.000 caracteres
+- Estar em português brasileiro`;
+
+      const response = await fetch('http://localhost:5000/api/generate-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          api_key: apiKey,
+          service: service,
+          max_tokens: 500
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        return data.summary;
+      } else {
+        throw new Error(data.error || 'Erro ao gerar resumo');
+      }
+    } catch (error) {
+      console.error('Erro ao gerar resumo:', error);
+      return `Erro ao gerar resumo: ${error.message}`;
+    }
+  };
+
+  // Função para gerar resumos para todos os títulos extraídos
+  const generateSummariesForAllTitles = async () => {
+    if (extractedTitles.length === 0) {
+      setError('Nenhum título extraído para gerar resumos');
+      return;
+    }
+
+    const apiKey = apiKeys[selectedSummaryService === 'chatgpt' ? 'openai' : selectedSummaryService];
+    if (!apiKey) {
+      setError(`Configure a chave da API ${selectedSummaryService.toUpperCase()} nas Configurações primeiro.`);
+      return;
+    }
+
+    setIsGeneratingSummaries(true);
+    setSummaryGenerationProgress(0);
+    setError('');
+
+    try {
+      const updatedTitles = [...extractedTitles];
+
+      for (let i = 0; i < updatedTitles.length; i++) {
+        const title = updatedTitles[i];
+
+        // Pular se já tem resumo
+        if (title.summary && title.summary !== 'Resumo não disponível') {
+          setSummaryGenerationProgress(((i + 1) / updatedTitles.length) * 100);
+          continue;
+        }
+
+        console.log(`Gerando resumo para: ${title.title.substring(0, 50)}...`);
+
+        const summary = await generateSummaryForTitle(title.title, selectedSummaryService);
+
+        // Atualizar o título com o resumo gerado
+        updatedTitles[i] = {
+          ...title,
+          summary: summary
+        };
+
+        // Atualizar o estado para mostrar progresso
+        setExtractedTitles([...updatedTitles]);
+        setSummaryGenerationProgress(((i + 1) / updatedTitles.length) * 100);
+
+        // Aguardar um pouco entre as gerações para evitar rate limiting
+        if (i < updatedTitles.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+
+      console.log('Todos os resumos foram gerados com sucesso');
+    } catch (error) {
+      setError(`Erro ao gerar resumos: ${error.message}`);
+      console.error('Erro na geração de resumos:', error);
+    } finally {
+      setIsGeneratingSummaries(false);
+      setSummaryGenerationProgress(0);
+    }
+  };
+
   const updateApiConfig = async (apiName, apiKey) => {
     try {
       setLoading(true);
@@ -1336,6 +1445,15 @@ Apresente ao usuário SOMENTE a premissa final completa em texto corrido (result
 
           console.log('Formatted titles:', formattedTitles);
           setExtractedTitles(formattedTitles);
+
+          // Gerar resumos automaticamente se a opção estiver ativada
+          if (autoGenerateSummaries && formattedTitles.length > 0) {
+            console.log('Gerando resumos automaticamente...');
+            setTimeout(() => {
+              generateSummariesForAllTitles();
+            }, 1000);
+          }
+
           setVideoData({
             id: data.channelId || 'unknown',
             originalTitle: data.channelName || 'Canal do YouTube',
@@ -1779,6 +1897,102 @@ Apresente ao usuário SOMENTE a premissa final completa em texto corrido (result
                 </div>
               </div>
 
+              {/* Configurações de Resumo */}
+              <div className="bg-gray-800 border border-gray-700 rounded-lg mb-6">
+                <div className="p-6">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <Bot className="h-6 w-6 text-purple-500" />
+                    <h3 className="text-xl font-semibold text-white">Geração Automática de Resumos</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Configuração de Serviço */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Serviço de IA para Resumos
+                      </label>
+                      <select
+                        value={selectedSummaryService}
+                        onChange={(e) => setSelectedSummaryService(e.target.value)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      >
+                        <option value="openai">OpenAI GPT-4</option>
+                        <option value="claude">Anthropic Claude</option>
+                        <option value="gemini">Google Gemini</option>
+                      </select>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Escolha o serviço de IA para gerar resumos dos títulos
+                      </p>
+                    </div>
+
+                    {/* Opção de Geração Automática */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Geração Automática
+                      </label>
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          id="autoGenerateSummaries"
+                          checked={autoGenerateSummaries}
+                          onChange={(e) => setAutoGenerateSummaries(e.target.checked)}
+                          className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                        />
+                        <label htmlFor="autoGenerateSummaries" className="text-sm text-gray-300">
+                          Gerar resumos automaticamente após extração
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Quando ativado, gera resumos automaticamente para todos os títulos extraídos
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Botão Manual */}
+                  {extractedTitles.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                      <button
+                        onClick={generateSummariesForAllTitles}
+                        disabled={isGeneratingSummaries || !apiKeys[selectedSummaryService === 'chatgpt' ? 'openai' : selectedSummaryService]}
+                        className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-6 rounded-md flex items-center"
+                      >
+                        {isGeneratingSummaries ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Gerando Resumos... ({Math.round(summaryGenerationProgress)}%)
+                          </>
+                        ) : (
+                          <>
+                            <Bot className="h-4 w-4 mr-2" />
+                            Gerar Resumos Manualmente
+                          </>
+                        )}
+                      </button>
+                      {!apiKeys[selectedSummaryService === 'chatgpt' ? 'openai' : selectedSummaryService] && (
+                        <p className="text-xs text-red-400 mt-2">
+                          Configure a API {selectedSummaryService.toUpperCase()} nas Configurações
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Barra de Progresso */}
+                  {isGeneratingSummaries && (
+                    <div className="mt-4">
+                      <div className="bg-gray-700 rounded-full h-2">
+                        <div
+                          className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${summaryGenerationProgress}%` }}
+                        ></div>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Gerando resumos... {Math.round(summaryGenerationProgress)}% concluído
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {error && (
                 <div className="mb-6 bg-red-900 border border-red-700 rounded-lg p-4">
                   <div className="flex items-center">
@@ -1816,7 +2030,24 @@ Apresente ao usuário SOMENTE a premissa final completa em texto corrido (result
                               {titleData.publishedAt && new Date(titleData.publishedAt).toLocaleDateString('pt-BR')}
                             </div>
                           </div>
-                          <p className="text-sm text-gray-400 mb-3">{titleData.summary}</p>
+                          <div className="text-sm text-gray-400 mb-3">
+                            {titleData.summary === 'Sem descrição disponível' ? (
+                              <div className="flex items-center space-x-2 text-yellow-400">
+                                <AlertCircle className="h-4 w-4" />
+                                <span>Resumo não disponível - Use o botão "Gerar Resumos" acima</span>
+                              </div>
+                            ) : titleData.summary?.startsWith('Erro ao gerar resumo:') ? (
+                              <div className="flex items-center space-x-2 text-red-400">
+                                <AlertCircle className="h-4 w-4" />
+                                <span>{titleData.summary}</span>
+                              </div>
+                            ) : (
+                              <div className="text-gray-300">
+                                <strong className="text-purple-400">📝 Resumo:</strong>
+                                <p className="mt-1 leading-relaxed">{titleData.summary}</p>
+                              </div>
+                            )}
+                          </div>
                           <div className="flex items-center space-x-4 text-xs">
                             <span className="bg-green-800 text-green-200 px-2 py-1 rounded">
                               Score: {titleData.score}/100

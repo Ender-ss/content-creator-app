@@ -2993,3 +2993,103 @@ def generate_image_together():
             'success': False,
             'error': f'Erro ao gerar imagem com Together.ai: {str(e)}'
         })
+
+@content_processor_bp.route('/generate-summary', methods=['POST'])
+def generate_summary():
+    """Generate summary using AI services"""
+    try:
+        data = request.get_json()
+        prompt = data.get('prompt', '').strip()
+        api_key = data.get('api_key', '').strip()
+        service = data.get('service', 'openai').lower()
+        max_tokens = data.get('max_tokens', 500)
+
+        if not prompt:
+            return jsonify({
+                'success': False,
+                'error': 'Prompt é obrigatório'
+            })
+
+        if not api_key:
+            return jsonify({
+                'success': False,
+                'error': f'API key do {service.upper()} é obrigatória'
+            })
+
+        print(f"DEBUG: Generating summary with {service} - Prompt length: {len(prompt)}")
+
+        summary = ""
+
+        if service == 'openai':
+            # OpenAI GPT-4
+            openai.api_key = api_key
+
+            response = openai.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "Você é um especialista em criar resumos informativos e envolventes para vídeos do YouTube em português brasileiro."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=max_tokens,
+                temperature=0.7
+            )
+
+            summary = response.choices[0].message.content.strip()
+
+        elif service == 'claude':
+            # Anthropic Claude
+            if not ANTHROPIC_AVAILABLE:
+                return jsonify({
+                    'success': False,
+                    'error': 'Biblioteca Anthropic não está disponível'
+                })
+
+            client = anthropic.Anthropic(api_key=api_key)
+
+            response = client.messages.create(
+                model="claude-3-sonnet-20240229",
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+
+            summary = response.content[0].text.strip()
+
+        elif service == 'gemini':
+            # Google Gemini
+            if not GEMINI_AVAILABLE:
+                return jsonify({
+                    'success': False,
+                    'error': 'Biblioteca Gemini não está disponível'
+                })
+
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-pro')
+
+            response = model.generate_content(prompt)
+            summary = response.text.strip()
+
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Serviço {service} não suportado'
+            })
+
+        print(f"DEBUG: Summary generated successfully - Length: {len(summary)}")
+
+        return jsonify({
+            'success': True,
+            'summary': summary,
+            'service': service,
+            'length': len(summary)
+        })
+
+    except Exception as e:
+        print(f"DEBUG: Summary generation error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao gerar resumo: {str(e)}'
+        })
